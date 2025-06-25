@@ -1,31 +1,68 @@
-// utils/encryption.ts
-
+// functions/src/utils/encryption.ts
 import * as crypto from "crypto";
-import { Environment } from "../config/environment";
+import { defineSecret } from "firebase-functions/params";
+
+const encryptionKey = defineSecret("ENCRYPTION_KEY");
 
 export class Encryption {
-  private static readonly algorithm = "aes-256-cbc";
+  private static algorithm = "aes-256-gcm";
 
-  static encrypt(data: string): string {
-    const key = Buffer.from(Environment.encryptionKey, "utf8").slice(0, 32);
+  static encrypt(text: string): string {
+    if (!encryptionKey.value()) {
+      throw new Error("Encryption key not configured");
+    }
+
     const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(
+      this.algorithm,
+      Buffer.from(encryptionKey.value(), "utf8"),
+      iv
+    );
 
-    const cipher = crypto.createCipheriv(this.algorithm, key, iv);
-    let encrypted = cipher.update(data, "utf8", "hex");
+    let encrypted = cipher.update(text, "utf8", "hex");
     encrypted += cipher.final("hex");
 
-    return iv.toString("hex") + encrypted;
+    const authTag = (cipher as any).getAuthTag();
+
+    return iv.toString("hex") + ":" + authTag.toString("hex") + ":" + encrypted;
   }
 
-  static decrypt(encryptedData: string): string {
-    const key = Buffer.from(Environment.encryptionKey, "utf8").slice(0, 32);
-    const iv = Buffer.from(encryptedData.slice(0, 32), "hex");
-    const encrypted = encryptedData.slice(32);
+  static decrypt(encryptedText: string): string {
+    if (!encryptionKey.value()) {
+      throw new Error("Encryption key not configured");
+    }
 
-    const decipher = crypto.createDecipheriv(this.algorithm, key, iv);
+    const parts = encryptedText.split(":");
+    if (parts.length !== 3) {
+      throw new Error("Invalid encrypted text format");
+    }
+
+    const iv = Buffer.from(parts[0], "hex");
+    const authTag = Buffer.from(parts[1], "hex");
+    const encrypted = parts[2];
+
+    const decipher = crypto.createDecipheriv(
+      this.algorithm,
+      Buffer.from(encryptionKey.value(), "utf8"),
+      iv
+    );
+    (decipher as any).setAuthTag(authTag);
+
     let decrypted = decipher.update(encrypted, "hex", "utf8");
     decrypted += decipher.final("utf8");
 
     return decrypted;
+  }
+
+  static hash(text: string): string {
+    return crypto.createHash("sha256").update(text).digest("hex");
+  }
+
+  static generateSecureToken(length = 32): string {
+    return crypto.randomBytes(length).toString("hex");
+  }
+
+  static compareHash(text: string, hash: string): boolean {
+    return this.hash(text) === hash;
   }
 }

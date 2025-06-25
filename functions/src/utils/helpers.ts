@@ -1,10 +1,9 @@
-// utils/helpers.ts
-
+// functions/src/utils/helpers.ts
 export class Helpers {
-  static chunkArray<T>(array: T[], size: number): T[][] {
+  static chunkArray<T>(array: T[], chunkSize: number): T[][] {
     const chunks: T[][] = [];
-    for (let i = 0; i < array.length; i += size) {
-      chunks.push(array.slice(i, i + size));
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
     }
     return chunks;
   }
@@ -13,18 +12,24 @@ export class Helpers {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  static formatCurrency(amount: number, currency = "GHS"): string {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-
-  static formatPhoneNumber(phone: string): string {
-    // Remove all non-digits and ensure it starts with country code
+  static sanitizePhoneNumber(phone: string): string {
+    // Remove all non-digits and ensure proper Ghana format
     const cleaned = phone.replace(/\D/g, "");
-    return cleaned.startsWith("233") ? cleaned : `233${cleaned}`;
+    if (cleaned.startsWith("233")) {
+      return cleaned;
+    }
+    if (cleaned.startsWith("0")) {
+      return "233" + cleaned.substring(1);
+    }
+    return "233" + cleaned;
   }
 
-  static generateOrderRef(orderId: string): string {
-    return orderId.slice(-6).toUpperCase();
+  static generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  static validateBusinessId(businessId: string): boolean {
+    return /^[a-zA-Z0-9_-]+$/.test(businessId) && businessId.length > 0;
   }
 
   static isValidUrl(url: string): boolean {
@@ -36,16 +41,15 @@ export class Helpers {
     }
   }
 
-  static retryAsync<T>(
-    fn: () => Promise<T>,
-    maxRetries: number,
-    delay: number = 1000
-  ): Promise<T> {
-    return fn().catch(async (error) => {
-      if (maxRetries <= 0) throw error;
+  static formatCurrency(amount: number, currency = "GHS"): string {
+    return new Intl.NumberFormat("en-GH", {
+      style: "currency",
+      currency,
+    }).format(amount);
+  }
 
-      await this.delay(delay);
-      return this.retryAsync(fn, maxRetries - 1, delay * 2);
-    });
+  static truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + "...";
   }
 }

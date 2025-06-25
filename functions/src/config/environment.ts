@@ -1,6 +1,6 @@
 // config/environment.ts
 
-import { functions } from "firebase-functions";
+import * as functions from "firebase-functions";
 
 export class Environment {
   static get whatsappWebhookSecret(): string {

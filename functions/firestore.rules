@@ -1,0 +1,295 @@
+// rules_version = '2';
+
+// service cloud.firestore {
+//   match /databases/{database}/documents {
+//     match /{document=**} {
+//       allow read, write: if false;
+//     }
+//   }
+// }
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // FOR DEVELOPMENT ONLY - NEVER USE IN PRODUCTION
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+// rules_version = '2';
+// service cloud.firestore {
+//   match /databases/{database}/documents {
+//     // Helper functions
+//     function isAuthenticated() {
+//       return request.auth != null;
+//     }
+    
+//     function isOwner(businessId) {
+//       return isAuthenticated() && 
+//              exists(/databases/$(database)/documents/businesses/$(businessId)) &&
+//              get(/databases/$(database)/documents/businesses/$(businessId)).data.owner_id == request.auth.uid;
+//     }
+    
+//     function isBusinessEmployee(businessId) {
+//       return isAuthenticated() && 
+//              exists(/databases/$(database)/documents/employees/$(request.auth.uid)) &&
+//              get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.business_id == businessId;
+//     }
+    
+//     function hasBusinessAccess(businessId) {
+//       return isOwner(businessId) || isBusinessEmployee(businessId);
+//     }
+    
+//     function isCustomer(customerId) {
+//       return isAuthenticated() && 
+//              exists(/databases/$(database)/documents/customers/$(customerId)) &&
+//              get(/databases/$(database)/documents/customers/$(customerId)).data.user_id == request.auth.uid;
+//     }
+    
+//     // USERS
+//     match /users/{userId} {
+//       allow read: if isAuthenticated() && request.auth.uid == userId;
+//       allow create: if isAuthenticated() && request.auth.uid == userId;
+//       allow update: if isAuthenticated() && request.auth.uid == userId;
+//       allow delete: if false; // Prevent deletion of user accounts
+//     }
+    
+//     // BUSINESSES
+//     match /businesses/{businessId} {
+//       // Public can read basic business info
+//       allow read: if true;
+//       // Only the authenticated user can create a business for themselves
+//       allow create: if isAuthenticated() && request.resource.data.owner_id == request.auth.uid;
+//       // Only the business owner can update the business
+//       allow update: if isOwner(businessId);
+//       // Prevent deletion of businesses
+//       allow delete: if false;
+//     }
+    
+//     // BUSINESS CONTACTS
+//     match /business_contacts/{docId} {
+//       allow read: if true;
+//       allow create, update: if isOwner(request.resource.data.business_id);
+//       allow delete: if false;
+//     }
+    
+//     // BUSINESS ADDRESSES
+//     match /business_addresses/{docId} {
+//       allow read: if true;
+//       allow create, update: if isOwner(request.resource.data.business_id);
+//       allow delete: if false;
+//     }
+    
+//     // SETTLEMENT ACCOUNTS
+//     match /settlement_accounts/{accountId} {
+//       allow read: if isOwner(resource.data.business_id);
+//       allow create, update: if isOwner(request.resource.data.business_id);
+//       allow delete: if isOwner(resource.data.business_id);
+//     }
+    
+//     // CATEGORIES
+//     match /categories/{categoryId} {
+//       allow read: if true;
+//       allow create, update: if isOwner(request.resource.data.business_id);
+//       allow delete: if isOwner(resource.data.business_id) &&
+//                      !exists(/databases/$(database)/documents/products/$(wildcard)) &&
+//                      get(/databases/$(database)/documents/products/$(wildcard)).data.category_id == categoryId;
+//     }
+    
+//     // PRODUCTS
+//     match /products/{productId} {
+//       allow read: if true;
+//       allow create, update: if isOwner(request.resource.data.business_id);
+//       allow delete: if isOwner(resource.data.business_id);
+//     }
+    
+//     // PRODUCT OPTIONS
+//     match /product_options/{optionId} {
+//       allow read: if true;
+      
+//       // For create, we need to verify the product belongs to the business owner
+//       allow create: if exists(/databases/$(database)/documents/products/$(request.resource.data.product_id)) &&
+//                      isOwner(get(/databases/$(database)/documents/products/$(request.resource.data.product_id)).data.business_id);
+      
+//       // For update, we need to verify the product option exists and the product belongs to the business owner
+//       allow update: if exists(/databases/$(database)/documents/products/$(resource.data.product_id)) &&
+//                      isOwner(get(/databases/$(database)/documents/products/$(resource.data.product_id)).data.business_id);
+      
+//       // For delete, similar checks as update
+//       allow delete: if exists(/databases/$(database)/documents/products/$(resource.data.product_id)) &&
+//                      isOwner(get(/databases/$(database)/documents/products/$(resource.data.product_id)).data.business_id);
+//     }
+    
+//     // CUSTOMERS
+//     match /customers/{customerId} {
+//       // Business owners and employees can read their customers
+//       allow read: if hasBusinessAccess(resource.data.business_id);
+      
+//       // Business owners and employees can create customers
+//       allow create: if hasBusinessAccess(request.resource.data.business_id);
+      
+//       // Business owners and employees can update their customers
+//       allow update: if hasBusinessAccess(resource.data.business_id);
+      
+//       // Only business owners can delete customers
+//       allow delete: if isOwner(resource.data.business_id);
+//     }
+    
+//     // PAYMENT ACCOUNTS
+//     match /payment_accounts/{accountId} {
+//       // Customer can read/write their own payment accounts
+//       allow read: if isAuthenticated() && 
+//                   exists(/databases/$(database)/documents/customers/$(resource.data.customer_id)) &&
+//                   get(/databases/$(database)/documents/customers/$(resource.data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Customer can create payment accounts for themselves
+//       allow create: if isAuthenticated() && 
+//                     exists(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)) &&
+//                     get(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Customer can update their own payment accounts
+//       allow update: if isAuthenticated() && 
+//                     exists(/databases/$(database)/documents/customers/$(resource.data.customer_id)) &&
+//                     get(/databases/$(database)/documents/customers/$(resource.data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Customer can delete their own payment accounts
+//       allow delete: if isAuthenticated() && 
+//                     exists(/databases/$(database)/documents/customers/$(resource.data.customer_id)) &&
+//                     get(/databases/$(database)/documents/customers/$(resource.data.customer_id)).data.user_id == request.auth.uid;
+//     }
+    
+//     // ORDERS
+//     match /orders/{orderId} {
+//       // Business can read orders for their business
+//       allow read: if hasBusinessAccess(resource.data.business_id);
+      
+//       // Customers can read their own orders
+//       allow read: if isAuthenticated() && 
+//                   exists(/databases/$(database)/documents/customers/$(resource.data.customer_id)) &&
+//                   get(/databases/$(database)/documents/customers/$(resource.data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Customers can create orders
+//       allow create: if isAuthenticated() && 
+//                     exists(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)) &&
+//                     get(/databases/$(database)/documents/customers/$(request.resource.data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Business can update order status
+//       allow update: if hasBusinessAccess(resource.data.business_id) &&
+//                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updated_at']);
+      
+//       // Customers can update their own orders (limited fields)
+//       allow update: if isAuthenticated() && 
+//                     exists(/databases/$(database)/documents/customers/$(resource.data.customer_id)) &&
+//                     get(/databases/$(database)/documents/customers/$(resource.data.customer_id)).data.user_id == request.auth.uid &&
+//                     resource.data.status == 'pending' &&
+//                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shipping_address', 'notes', 'updated_at']);
+      
+//       // Only business owner can delete orders
+//       allow delete: if isOwner(resource.data.business_id);
+//     }
+    
+//     // ORDER ITEMS
+//     match /order_items/{itemId} {
+//       // Business can read order items for their business
+//       allow read: if exists(/databases/$(database)/documents/orders/$(resource.data.order_id)) &&
+//                   hasBusinessAccess(get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.business_id);
+      
+//       // Customers can read their own order items
+//       allow read: if isAuthenticated() && 
+//                   exists(/databases/$(database)/documents/orders/$(resource.data.order_id)) &&
+//                   exists(/databases/$(database)/documents/customers/$(get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.customer_id)) &&
+//                   get(/databases/$(database)/documents/customers/$(get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Customers can create order items
+//       allow create: if isAuthenticated() && 
+//                     exists(/databases/$(database)/documents/orders/$(request.resource.data.order_id)) &&
+//                     exists(/databases/$(database)/documents/customers/$(get(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.customer_id)) &&
+//                     get(/databases/$(database)/documents/customers/$(get(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.customer_id)).data.user_id == request.auth.uid &&
+//                     get(/databases/$(database)/documents/orders/$(request.resource.data.order_id)).data.status == 'pending';
+      
+//       // Only business owners can update order items
+//       allow update: if exists(/databases/$(database)/documents/orders/$(resource.data.order_id)) &&
+//                     isOwner(get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.business_id);
+      
+//       // Only business owners can delete order items
+//       allow delete: if exists(/databases/$(database)/documents/orders/$(resource.data.order_id)) &&
+//                     isOwner(get(/databases/$(database)/documents/orders/$(resource.data.order_id)).data.business_id);
+//     }
+    
+//     // TRANSACTIONS
+//     match /transactions/{transactionId} {
+//       // Business can read transactions for their business
+//       allow read: if hasBusinessAccess(resource.data.business_id);
+      
+//       // Customers can read their own transactions
+//       allow read: if isAuthenticated() && 
+//                   exists(/databases/$(database)/documents/customers/$(resource.data.customer_id)) &&
+//                   get(/databases/$(database)/documents/customers/$(resource.data.customer_id)).data.user_id == request.auth.uid;
+      
+//       // Only the system or business owner can create transactions
+//       allow create: if isOwner(request.resource.data.business_id);
+      
+//       // Only the system or business owner can update transactions
+//       allow update: if isOwner(resource.data.business_id) &&
+//                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'payment_date']);
+      
+//       // No one can delete transactions
+//       allow delete: if false;
+//     }
+    
+//     // BILLING ACCOUNTS
+//     match /billing_accounts/{accountId} {
+//       // Business owner can read their billing accounts
+//       allow read: if isOwner(resource.data.business_id);
+      
+//       // Business owner can create billing accounts
+//       allow create: if isOwner(request.resource.data.business_id);
+      
+//       // Business owner can update billing accounts
+//       allow update: if isOwner(resource.data.business_id);
+      
+//       // Business owner can delete billing accounts
+//       allow delete: if isOwner(resource.data.business_id);
+//     }
+    
+//     // SUBSCRIPTION PLANS
+//     match /subscription_plans/{planId} {
+//       // Anyone can read subscription plans
+//       allow read: if true;
+      
+//       // Only admins can write subscription plans
+//       allow write: if false; // Restrict to admin operations through backend functions
+//     }
+    
+//     // SUBSCRIPTIONS
+//     match /subscriptions/{subscriptionId} {
+//       // Business owner can read their subscriptions
+//       allow read: if isOwner(resource.data.business_id);
+      
+//       // Business owner can create subscriptions
+//       allow create: if isOwner(request.resource.data.business_id);
+      
+//       // Business owner can update limited fields of their subscriptions
+//       allow update: if isOwner(resource.data.business_id) &&
+//                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['auto_renew']);
+      
+//       // No one can delete subscriptions directly
+//       allow delete: if false;
+//     }
+    
+//     // SUBSCRIPTION PAYMENTS
+//     match /subscription_payments/{paymentId} {
+//       // Business owner can read their subscription payments
+//       allow read: if exists(/databases/$(database)/documents/subscriptions/$(resource.data.subscription_id)) &&
+//                   isOwner(get(/databases/$(database)/documents/subscriptions/$(resource.data.subscription_id)).data.business_id);
+      
+//       // Only system can create subscription payments
+//       allow create: if false; // Restrict to backend functions
+      
+//       // No one can update or delete subscription payments
+//       allow update, delete: if false;
+//     }
+    
+//     // Add any additional collections specific to your application
+//   }
+// }

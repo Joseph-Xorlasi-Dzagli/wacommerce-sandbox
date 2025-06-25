@@ -1,15 +1,14 @@
-// services/whatsapp.service.ts
-
-import { firestore } from "firebase-admin";
-import { functions } from "firebase-functions";
+// functions/src/services/whatsapp.service.ts
+import { getFirestore } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/v2/https";
 import axios from "axios";
 import { APP_CONFIG, ERROR_CODES } from "../config/constants";
 import { Encryption } from "../utils/encryption";
 import { Logger } from "../utils/logger";
-import { WhatsAppConfig } from "../types/entities";
+import type { WhatsAppConfig } from "../types/entities";
 
 export class WhatsAppService {
-  private static db = firestore();
+  private static db = getFirestore();
 
   static async getConfig(businessId: string): Promise<WhatsAppConfig> {
     const configDoc = await this.db
@@ -18,7 +17,7 @@ export class WhatsAppService {
       .get();
 
     if (!configDoc.exists || !configDoc.data()?.active) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "failed-precondition",
         ERROR_CODES.WHATSAPP_NOT_CONFIGURED
       );
@@ -127,9 +126,70 @@ export class WhatsAppService {
     });
   }
 
+  static async deleteCatalogProducts(
+    config: WhatsAppConfig,
+    productIds: string[]
+  ): Promise<void> {
+    const response = await axios.post(
+      `${APP_CONFIG.WHATSAPP.BASE_URL}/${APP_CONFIG.WHATSAPP.API_VERSION}/${config.catalog_id}/batch`,
+      {
+        requests: productIds.map((productId) => ({
+          method: "DELETE",
+          retailer_id: productId,
+        })),
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${config.access_token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      }
+    );
+
+    Logger.info("Catalog products deleted", {
+      deletedCount: productIds.length,
+      catalogId: config.catalog_id,
+    });
+  }
+
+  static async getCatalogProducts(
+    config: WhatsAppConfig,
+    limit = 100
+  ): Promise<any[]> {
+    const response = await axios.get(
+      `${APP_CONFIG.WHATSAPP.BASE_URL}/${APP_CONFIG.WHATSAPP.API_VERSION}/${config.catalog_id}/products`,
+      {
+        headers: {
+          Authorization: `Bearer ${config.access_token}`,
+        },
+        params: {
+          limit,
+        },
+        timeout: 30000,
+      }
+    );
+
+    return response.data.data || [];
+  }
+
   private static formatPhoneNumber(phone: string): string {
     // Remove all non-digits and ensure proper format
     const cleaned = phone.replace(/\D/g, "");
     return cleaned.startsWith("233") ? cleaned : `233${cleaned}`;
+  }
+
+  static async validateWebhookSignature(
+    payload: string,
+    signature: string,
+    secret: string
+  ): Promise<boolean> {
+    const crypto = require("crypto");
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(payload)
+      .digest("hex");
+
+    return signature === `sha256=${expectedSignature}`;
   }
 }

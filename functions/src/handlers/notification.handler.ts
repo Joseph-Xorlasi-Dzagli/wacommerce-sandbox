@@ -1,86 +1,79 @@
-import { NotificationService } from "@/services/notification.service";
+// functions/src/handlers/notification.handler.ts
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/v2/https";
+import { AuthService } from "../services/auth.service";
+import { WhatsAppService } from "../services/whatsapp.service";
+import { NotificationService } from "../services/notification.service";
+import { Logger } from "../utils/logger";
+import { Helpers } from "../utils/helpers";
 import {
   SendNotificationRequest,
   SendNotificationResponse,
 } from "../types/requests";
 
 export class NotificationHandler {
-  private static db = firestore();
+  private static db = getFirestore();
 
   static async sendOrderNotification(
-    request: SendNotificationRequest,
-    userId: string
+    orderId: string,
+    businessId: string,
+    notificationType: string,
+    userId: string,
+    customMessage?: string
   ): Promise<SendNotificationResponse> {
-    const { businessId, orderId, notificationType, customMessage } = request;
-
     try {
+      // Validate access
       await AuthService.validateBusinessAccess(userId, businessId);
 
       // Get order details
       const orderDoc = await this.db.collection("orders").doc(orderId).get();
       if (!orderDoc.exists) {
-        throw new functions.https.HttpsError("not-found", "Order not found");
+        throw new HttpsError("not-found", "Order not found");
       }
 
       const order = orderDoc.data();
       if (order?.business_id !== businessId) {
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
           "permission-denied",
-          "Order does not belong to business"
+          "Order belongs to different business"
         );
       }
 
-      // Check if notifications are enabled
-      const businessSettings = await NotificationService.getBusinessSettings(
-        businessId
-      );
-      if (!businessSettings.notifications?.order_updates) {
-        return {
-          success: false,
-          message: "Order notifications are disabled for this business",
-        };
-      }
-
-      // Get customer WhatsApp number
-      const customerNumber =
-        order.customer?.whatsapp_number || order.customer?.phone;
-      if (!customerNumber) {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "Customer WhatsApp number not available"
-        );
-      }
-
-      // Build message
-      const messageContent = await NotificationService.buildOrderMessage(
-        businessId,
-        order,
-        notificationType,
-        customMessage
-      );
-
-      // Send message
+      // Get WhatsApp config
       const whatsappConfig = await WhatsAppService.getConfig(businessId);
+
+      // Build notification message
+      const message =
+        customMessage || this.buildNotificationMessage(notificationType, order);
+
+      // Generate notification ID
+      const notificationId = Helpers.generateId();
+
+      // Send WhatsApp message
+      const messagePayload = {
+        type: "text",
+        text: { body: message },
+      };
+
       const messageResponse = await WhatsAppService.sendMessage(
         whatsappConfig,
-        customerNumber,
-        messageContent
+        order.customer.whatsapp_number || order.customer.phone,
+        messagePayload
       );
 
       // Store notification record
-      const notificationId = await NotificationService.storeNotificationRecord({
+      await NotificationService.storeNotificationRecord({
         orderId,
         businessId,
-        customerId: order.customer?.id,
         notificationType,
-        message: messageContent.text || messageContent.template?.name,
-        whatsappMessageId: messageResponse.messages?.[0]?.id,
+        message,
+        messageId: messageResponse.messages?.[0]?.id,
         deliveryStatus: "sent",
       });
 
       // Update order
       await orderDoc.ref.update({
-        last_notification_sent: firestore.FieldValue.serverTimestamp(),
+        last_notification_sent: FieldValue.serverTimestamp(),
         last_notification_type: notificationType,
       });
 
@@ -118,10 +111,10 @@ export class NotificationHandler {
         deliveryStatus: "failed",
       });
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "internal",
         "Notification failed",
-        error.message
+        (error as Error).message
       );
     }
   }
@@ -178,15 +171,176 @@ export class NotificationHandler {
       }
     }
 
-    // Handle incoming messages (for analytics)
+    // Handle incoming messages
     if (messageData.messages) {
       for (const message of messageData.messages) {
-        await NotificationService.logAnalytics("system", "message_received", {
-          from: message.from,
-          type: message.type,
-          timestamp: new Date(message.timestamp * 1000),
-        });
+        await this.handleIncomingMessage(message);
       }
+    }
+  }
+
+  private static async handleIncomingMessage(message: any): Promise<void> {
+    try {
+      // Store incoming message for future processing
+      await this.db.collection("incoming_messages").add({
+        whatsapp_message_id: message.id,
+        from: message.from,
+        type: message.type,
+        content: message.text?.body || message.image?.caption || "",
+        timestamp: new Date(message.timestamp * 1000),
+        processed: false,
+        created_at: FieldValue.serverTimestamp(),
+      });
+
+      Logger.info("Incoming message stored", {
+        messageId: message.id,
+        from: message.from,
+        type: message.type,
+      });
+    } catch (error) {
+      Logger.error("Failed to handle incoming message", error, {
+        messageId: message.id,
+      });
+    }
+  }
+
+  private static buildNotificationMessage(
+    notificationType: string,
+    order: any
+  ): string {
+    const customerName = order.customer?.name || "Customer";
+    const orderId = order.id;
+    const total = Helpers.formatCurrency(order.total);
+
+    switch (notificationType) {
+      case "status_change":
+        return `Hi ${customerName}! Your order #${orderId} status has been updated to: ${order.status}. Total: ${total}`;
+
+      case "payment_received":
+        return `Hi ${customerName}! We've received your payment for order #${orderId}. Total: ${total}. Thank you!`;
+
+      case "shipping_update":
+        return `Hi ${customerName}! Your order #${orderId} is now being shipped. You'll receive tracking details soon. Total: ${total}`;
+
+      case "order_confirmed":
+        return `Hi ${customerName}! Your order #${orderId} has been confirmed. Total: ${total}. We'll keep you updated on the progress.`;
+
+      case "order_delivered":
+        return `Hi ${customerName}! Your order #${orderId} has been delivered. Total: ${total}. Thank you for your business!`;
+
+      default:
+        return `Hi ${customerName}! There's an update on your order #${orderId}. Total: ${total}`;
+    }
+  }
+
+  static async getNotificationHistory(
+    businessId: string,
+    userId: string,
+    orderId?: string
+  ): Promise<any[]> {
+    try {
+      await AuthService.validateBusinessAccess(userId, businessId);
+
+      return await NotificationService.getNotificationHistory(
+        businessId,
+        orderId
+      );
+    } catch (error) {
+      Logger.error("Failed to get notification history", error, {
+        businessId,
+        orderId,
+      });
+      throw new HttpsError(
+        "internal",
+        "Failed to get notification history",
+        (error as Error).message
+      );
+    }
+  }
+
+  static async getDeliveryStats(
+    businessId: string,
+    userId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<any> {
+    try {
+      await AuthService.validateBusinessAccess(userId, businessId);
+
+      return await NotificationService.getDeliveryStats(
+        businessId,
+        startDate,
+        endDate
+      );
+    } catch (error) {
+      Logger.error("Failed to get delivery stats", error, {
+        businessId,
+      });
+      throw new HttpsError(
+        "internal",
+        "Failed to get delivery stats",
+        (error as Error).message
+      );
+    }
+  }
+
+  static async sendBulkNotifications(
+    businessId: string,
+    userId: string,
+    orderIds: string[],
+    notificationType: string,
+    customMessage?: string
+  ): Promise<any> {
+    try {
+      await AuthService.validateBusinessAccess(userId, businessId);
+
+      const results = {
+        total: orderIds.length,
+        successful: 0,
+        failed: 0,
+        errors: [] as any[],
+      };
+
+      // Process in batches to avoid overwhelming the API
+      const batches = Helpers.chunkArray(orderIds, 5);
+
+      for (const batch of batches) {
+        const batchPromises = batch.map(async (orderId) => {
+          try {
+            await this.sendOrderNotification(
+              orderId,
+              businessId,
+              notificationType,
+              userId,
+              customMessage
+            );
+            results.successful++;
+          } catch (error) {
+            results.failed++;
+            results.errors.push({
+              orderId,
+              error: (error as Error).message,
+            });
+          }
+        });
+
+        await Promise.all(batchPromises);
+
+        // Add delay between batches
+        if (batches.indexOf(batch) < batches.length - 1) {
+          await Helpers.delay(1000);
+        }
+      }
+
+      Logger.info("Bulk notifications completed", results);
+      return results;
+    } catch (error) {
+      Logger.error("Bulk notifications failed", error, { businessId });
+      throw new HttpsError(
+        "internal",
+        "Bulk notifications failed",
+        (error as Error).message
+      );
     }
   }
 }
