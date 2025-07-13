@@ -13,7 +13,9 @@ import { Product } from "../types/entities";
 import { SyncCatalogResponse, BaseResponse } from "../types/responses";
 
 export class CatalogHandler {
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async syncCatalog(
     request: SyncCatalogRequest,

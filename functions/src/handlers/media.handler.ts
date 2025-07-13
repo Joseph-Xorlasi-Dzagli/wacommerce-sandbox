@@ -11,7 +11,9 @@ import { Validator } from "../utils/validation";
 import { UploadMediaRequest, UploadMediaResponse } from "../types/requests";
 
 export class MediaHandler {
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async uploadMedia(
     request: UploadMediaRequest,
@@ -137,7 +139,10 @@ export class MediaHandler {
         const batchPromises = batch.map(async (product) => {
           const productId = product.id;
           try {
-            if ((product as any).image_url && !(product as any).whatsapp_image_id) {
+            if (
+              (product as any).image_url &&
+              !(product as any).whatsapp_image_id
+            ) {
               await this.uploadMedia(
                 {
                   businessId,

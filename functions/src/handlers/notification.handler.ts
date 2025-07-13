@@ -6,13 +6,12 @@ import { WhatsAppService } from "../services/whatsapp.service";
 import { NotificationService } from "../services/notification.service";
 import { Logger } from "../utils/logger";
 import { Helpers } from "../utils/helpers";
-import {
-  SendNotificationRequest,
-  SendNotificationResponse,
-} from "../types/requests";
+import { SendNotificationResponse } from "../types/requests";
 
 export class NotificationHandler {
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async sendOrderNotification(
     orderId: string,

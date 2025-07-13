@@ -1,0 +1,15 @@
+{
+  "whatsapp": {
+    "webhook_secret": "LetsbuildApsel",
+    "api_version": "v22.0"
+  },
+  "encryption": {
+    "key": "WD6sOtftwlmBi6swrmIpNfUqO-XfWFS8C4V5tvyc3GI="
+  },
+  "storage": {
+    "bucket": "apsel-c9e99.firebasestorage.app"
+  },
+  "WEBHOOK_VERIFY_TOKEN": "your_webhook_verify_token",
+  "GCLOUD_PROJECT": "apsel-c9e99",
+  "NODE_ENV": "development"
+}

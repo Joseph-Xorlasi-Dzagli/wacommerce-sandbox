@@ -7,6 +7,7 @@ export const APP_CONFIG = {
     BATCH_SIZE: 10,
     MEDIA_EXPIRES_DAYS: 30,
     MAX_RETRIES: 3,
+    WEBHOOK_VERIFY_TOKEN: "your_webhook_verify_token",
     RATE_LIMIT: {
       MESSAGES_PER_SECOND: 20,
       CATALOG_OPERATIONS_PER_MINUTE: 100,

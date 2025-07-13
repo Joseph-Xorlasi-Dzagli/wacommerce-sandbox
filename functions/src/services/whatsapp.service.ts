@@ -8,7 +8,9 @@ import { Logger } from "../utils/logger";
 import type { WhatsAppConfig } from "../types/entities";
 
 export class WhatsAppService {
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async getConfig(businessId: string): Promise<WhatsAppConfig> {
     const configDoc = await this.db
@@ -102,7 +104,7 @@ export class WhatsAppService {
     config: WhatsAppConfig,
     products: any[]
   ): Promise<void> {
-    const response = await axios.post(
+    await axios.post(
       `${APP_CONFIG.WHATSAPP.BASE_URL}/${APP_CONFIG.WHATSAPP.API_VERSION}/${config.catalog_id}/batch`,
       {
         allow_upsert: true,
@@ -130,7 +132,7 @@ export class WhatsAppService {
     config: WhatsAppConfig,
     productIds: string[]
   ): Promise<void> {
-    const response = await axios.post(
+    await axios.post(
       `${APP_CONFIG.WHATSAPP.BASE_URL}/${APP_CONFIG.WHATSAPP.API_VERSION}/${config.catalog_id}/batch`,
       {
         requests: productIds.map((productId) => ({

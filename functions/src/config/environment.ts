@@ -18,7 +18,7 @@ export class Environment {
   }
 
   static get projectId(): string {
-    return process.env.GCLOUD_PROJECT || "default-project";
+    return process.env.GCLOUD_PROJECT || "apsel-c9e99";
   }
 
   static get isDevelopment(): boolean {

@@ -5,6 +5,7 @@ import { initializeApp } from "firebase-admin/app";
 import { CatalogHandler } from "./handlers/catalog.handler";
 import { MediaHandler } from "./handlers/media.handler";
 import { NotificationHandler } from "./handlers/notification.handler";
+import { APP_CONFIG } from "./config/constants";
 
 // Initialize Firebase Admin
 initializeApp();
@@ -98,7 +99,10 @@ export const whatsappWebhook = onRequest(
       const token = req.query["hub.verify_token"];
       const challenge = req.query["hub.challenge"];
 
-      if (mode === "subscribe" && token === process.env.WEBHOOK_VERIFY_TOKEN) {
+      if (
+        mode === "subscribe" &&
+        token === APP_CONFIG.WHATSAPP.WEBHOOK_VERIFY_TOKEN
+      ) {
         res.status(200).send(challenge);
       } else {
         res.status(403).send("Forbidden");

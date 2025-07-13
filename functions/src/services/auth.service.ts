@@ -4,7 +4,9 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { Logger } from "../utils/logger";
 
 export class AuthService {
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async validateBusinessAccess(
     userId: string,

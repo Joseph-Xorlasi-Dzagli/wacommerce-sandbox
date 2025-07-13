@@ -3,7 +3,9 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { Logger } from "../utils/logger";
 
 export class NotificationService {
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async storeNotificationRecord(data: {
     orderId: string;

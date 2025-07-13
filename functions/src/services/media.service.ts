@@ -2,13 +2,13 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import axios from "axios";
 import sharp from "sharp";
-import { Storage } from "@google-cloud/storage";
 import { APP_CONFIG } from "../config/constants";
 import { Logger } from "../utils/logger";
 
 export class MediaService {
-  private static storage = new Storage();
-  private static db = getFirestore();
+  private static get db() {
+    return getFirestore();
+  }
 
   static async optimizeImage(
     imageUrl: string,
